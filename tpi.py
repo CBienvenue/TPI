@@ -166,3 +166,43 @@ def functionODF(img,step=1):
     
 #Output parameters
     return odf,theta
+
+
+#Measure the mean angle of the fringes on image
+def measureAngleInterferenceFringe(img,step):
+    
+    """
+        
+        Function that measure the mean orientation of an image fringes.
+        
+        In:
+            img: Image to process (.png)
+            step: Angle step for Radon transform [degrees]
+        Out: 
+            meanTheta: mean fringes angle [degrees]
+            rsquared: R^2
+        
+    """
+    
+    from scipy.optimize import curve_fit
+    import numpy as np
+    
+    odf,theta = functionODF(img,step)
+    
+    def gauss(x,A,mu,sigma,d):
+        return A*np.exp(-(x-mu)**2/(2*sigma**2)) + d
+    
+    def gauss_fit(x, y):
+        mu = sum(x * y) / sum(y)
+        sigma = np.sqrt(sum(y * (x - mu) ** 2) / sum(y))
+        popt, pcov = curve_fit(gauss, x, y, p0=[min(y), max(y), mu, sigma])
+        return popt
+    
+    p = gauss_fit(theta, odf)
+    
+    res = odf - gauss(theta,*p)
+    ss_res = np.sum(res**2)
+    ss_tot = np.sum((odf-np.mean(odf))**2)
+    rsquared = 1 - (ss_res/ss_tot)
+
+    return p[1],rsquared
