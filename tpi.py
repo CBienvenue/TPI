@@ -206,3 +206,49 @@ def measureAngleInterferenceFringe(img,step):
     rsquared = 1 - (ss_res/ss_tot)
 
     return p[1],rsquared
+
+#Mesure the DeltaTheta parameters
+def measureDeltaTheta(n,destinationFolder,step_angle):
+        
+    from PIL import Image
+    from joblib import Parallel, delayed
+    import multiprocessing
+    ncore = multiprocessing.cpu_count()
+    
+    img = Image.open(destinationFolder + '\img{0}.png'.format(n))
+    w,h = img.size
+    img1 = img.crop((0,0,round(w/2),h))
+    img2 = img.crop((round(w/2),0,w,h))
+        
+    M = Parallel(n_jobs=ncore)(delayed(measureAngleInterferenceFringe)(i,step_angle) for i in [img1,img2])
+
+    return M[0][0] - M[1][0]
+
+#Calibration of DeltaTheta over distance
+def calibrationDeltaTheta(n,destinationFolder,step_z,step_angle):
+    #import matplotlib.pyplot as plt
+    from scipy.optimize import curve_fit
+    import numpy as np
+    from joblib import Parallel, delayed
+    import multiprocessing
+    ncore = multiprocessing.cpu_count()
+    
+    vectorz = np.arange(n)*step_z
+    vectorDeltaTheta = Parallel(n_jobs=ncore)(delayed(measureDeltaTheta)(i,destinationFolder,step_angle) for i in np.arange(n))
+    
+    linearFct = lambda x,a,b: a*x+b
+    linearFit = lambda x,y: curve_fit(linearFct, x, y)
+    
+    p = linearFit(vectorz,vectorDeltaTheta)
+    
+    sigmaab = 2*np.sqrt(np.diagonal(p[1]))
+    uncertainty = abs((p[0]-sigmaab)[1]/(p[0]-sigmaab)[0] - (p[0]+sigmaab)[1]/(p[0]+sigmaab)[0])
+    
+    #lowerBound = linearFct(vectorz,*(p[0]-sigmaab))
+    #upperBound = linearFct(vectorz,*(p[0]+sigmaab))
+    
+    #plt.plot(vectorz,vectorDeltaTheta,'.')
+    #plt.plot(vectorz, linearFct(vectorz,p[0][0],p[0][1]))
+    #plt.fill_between(vectorz,lowerBound,upperBound,color = 'black', alpha = 0.15)
+
+    return p[0],uncertainty
